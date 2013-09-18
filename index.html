@@ -27,41 +27,185 @@
 
         <p class="header">This project is maintained by <a class="header name" href="https://github.com/antmicro">antmicro</a></p>
 
+
       </header>
       <section>
-        <h1>Migrant 0.3.3</h1>
+        <h1>
+<a name="migrant-04" class="anchor" href="#migrant-04"><span class="octicon octicon-link"></span></a>Migrant 0.4</h1>
 
-<p>This is the <em>Migrant</em> project by <a href="http://antmicro.com">Ant Micro</a>, a fast and flexible serialization framework usable for undecorated classes, written in C#. Its aim is to provide an easy way to serialize complex graphs of objects, with minimal programming effort.</p>
+<p>This is the <em>Migrant</em> project by <a href="http://antmicro.com">Antmicro</a>, a fast and flexible serialization framework usable for undecorated classes, written in C#.</p>
 
-<h2>Features</h2>
+<h2>
+<a name="table-of-contents" class="anchor" href="#table-of-contents"><span class="octicon octicon-link"></span></a>Table of Contents</h2>
+
+<ol>
+<li> Introduction</li>
+<li> Directory organization</li>
+<li> Usage</li>
+<li> Features</li>
+<li> Download</li>
+<li> Compilation</li>
+<li> More information</li>
+<li> Licence</li>
+</ol><h2>
+<a name="introduction" class="anchor" href="#introduction"><span class="octicon octicon-link"></span></a>Introduction</h2>
+
+<p>Migrant is a serialization framework for .NET and Mono projects. Its aim is to provide an easy way to serialize complex graphs of objects, with minimal programming effort.</p>
+
+<h2>
+<a name="directory-organization" class="anchor" href="#directory-organization"><span class="octicon octicon-link"></span></a>Directory organization</h2>
+
+<p>There are three main directories:</p>
 
 <ul>
-	<li>designed for ease of use -- call one method to serialize, one to deserialize an object</li>
-	<li>works out of the box for nested objects, value and reference types and complex collections</li>
-	<li>graceful failure for objects which should not be serialized (e.g. pointers)</li>
-	<li>compact, endianness-independent data format</li>
-	<li>takes into account complex graph relations between objects</li>
-	<li>allows custom (de)serialization patterns for specific types</li>
-	<li>supports Surrogates</li>
-	<li><b>(new)</b> can use generated methods rather than reflection for both de- and serialization for increased speed</li>
-	<li><b>(extra)</b> mechanism to translate primitive .NET types into a compact binary representation</li>
-	<li><b>(extra)</b> deep cloning of objects</li>
-	
-</ul>
+<li>
+<code>Migrant</code> - contains the source code of the library;</li>
+<li>
+<code>Tests</code> - contains unit tests (we're using NUnit);</li>
+<li>
+<code>PerformanceTests</code> - contains performance assessment project, based on NUnit;</li>
+<li>
+<code>ResultBrowser</code> - simple command line tool to browse performance test results history;</li>
+<li>
+<code>Lib</code> - contains required third party libraries (for all the projects).</li>
+</ul><p>There are two solution files - Migrant.sln, the core library, and MigrantWithTests.sln, combining both the test project and Migrant library.</p>
 
-<h2>More information</h2>
+<h2>
+<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage</h2>
 
-<p>A more thorough documentation can be found <a href='https://github.com/antmicro/Migrant/blob/master/README.md'>in the project's README file</a>. A RTD version is planned.</p>
+<p>Here we present some simple use cases of Migrant. They are written in pseudo-C#, but can be easily translated to other CLI languages.</p>
 
-<p>Additional information about us and our other activities is available on our <a href="http://www.antmicro.com/OpenSource">company's website</a>.</p>
+<h3>
+<a name="simple-serialization" class="anchor" href="#simple-serialization"><span class="octicon octicon-link"></span></a>Simple serialization</h3>
+
+<pre><code>var stream = new MyCustomStream();
+var myComplexObject = new MyComplexType(complexParameters);
+var serializer = new Serializer();
+
+serializer.Serialize(myComplexObject, stream);
+
+stream.Rewind();
+
+var myDeserializedObject = serializer.Deserialize&lt;MyComplexType&gt;(stream);
+</code></pre>
+
+<h3>
+<a name="deep-clone" class="anchor" href="#deep-clone"><span class="octicon octicon-link"></span></a>Deep clone</h3>
+
+<pre><code>var myComplexObject = new MyComplexType(complexParameters);
+var myObjectCopy = Serializer.DeepCopy(myComplexObject);
+</code></pre>
+
+<h3>
+<a name="simple-types-to-bytes" class="anchor" href="#simple-types-to-bytes"><span class="octicon octicon-link"></span></a>Simple types to bytes</h3>
+
+<pre><code>var myLongArray = new long[] { 1, 2, ... };
+var myOtherArray = new long[myLongArray.Length];
+var stream = new MyCustomStream();
+
+using(var writer = new PrimitiveWriter(stream))
+{
+   foreach(var element in myLongArray)
+   {
+      writer.Write(element);
+   }
+}
+
+stream.Rewind();
+
+using(var reader = new PrimitiveReader(stream))
+{
+   for(var i=0; i&lt;myLongArray.Length; i++)
+   {
+      myOtherArray[i] = reader.ReadInt64();
+   }
+}
+</code></pre>
+
+<h3>
+<a name="surrogates" class="anchor" href="#surrogates"><span class="octicon octicon-link"></span></a>Surrogates</h3>
+
+<pre><code>var serializer = new Serializer();
+var someObject = new SomeObject();
+serializer.ForObject&lt;SomeObject&gt;().SetSurrogate(x =&gt; new AnotherObject());
+serializer.Serialize(someObject, stream);
+
+stream.Rewind();
+
+var anObject = serializer.Deserialize&lt;object&gt;(stream);
+Console.WriteLine(anObject.GetType().Name); // prints AnotherObject
+</code></pre>
+
+<h3>
+<a name="version-tolerance" class="anchor" href="#version-tolerance"><span class="octicon octicon-link"></span></a>Version tolerance</h3>
+
+<p>What if some changes are made to the layout of the class between serialization and deserialization? Migrant can cope with that up to some extent. During creation of serializer you can specify settings, among which there is a version tolerance level. This is an enumeration with five possible values:</p>
+
+<ul>
+<li>
+<code>GUID</code> - the most restrictive option. Deserialization is possible if module ID (which is GUID generated when module is compiled) is the same as it was during serialization. In other words it deserialization must be done using the same assembly as serialization used.</li>
+<li>
+<code>Exact</code> - this is a default value. Deserialization is possible if no fields are added or removed and no type changes were done.</li>
+<li>
+<code>FieldAddition</code> - new version of the type can contain more fields than it contained during serialization. They are initialized with their default values.</li>
+<li>
+<code>FieldRemoval</code> - new version of the type can contain less fields than it contained during serialization.</li>
+<li>
+<code>FieldAdditionAndRemoval</code> - combination of these two above.</li>
+</ul><h2>
+<a name="features" class="anchor" href="#features"><span class="octicon octicon-link"></span></a>Features</h2>
+
+<p>Migrant is designed to be easy to use. For most cases, the scenario consists of calling one method to serialize, and another to deserialize a whole set of interconnected objects. It's not necessary to provide any information about serialized types, only the root object to save. All of the other objects referenced by the root are serialized automatically. It works out of the box for value and reference types, complex collections etc. While serialization of certain objects (e.g. pointers) is meaningless and may lead to hard-to-trace problems, Migrant will gracefully fail to serialize such objects, providing the programmer with full information on what caused the problem and where is it located.</p>
+
+<p>The output of the serialization process is a stream of bytes, intended to reflect the memory organization of the actual system. This data format is compact and thus easy to transfer via network. It's endianness-independent, making it possible to migrate the application's state between different platforms.</p>
+
+<p>Many of the available serialization frameworks do not consider complex graph relations between objects. It's a common situation that serializing and deserializing two objects A and B referencing the same object C leaves you with two identical copies of C, one referenced by A and one referenced by B. Migrant takes such scenarios into account, preserving the identity of references, without further code decoration. Thanks to this, a programmer is relieved of implementing complex consistency mechanisms for the system and the resulting binary form is even smaller.</p>
+
+<p>Migrant's ease of use does not prohibit the programmer from controlling the serialization behaviour in more complex scenarios. It is possible to hide some fields of a class, to deserialize objects using their custom constructors and to add hooks to the class code that will execute before or after (de)serialization. With little effort it is possible for the programmer to reimplement (de)serialization patterns for specific types.</p>
+
+<p>Apart from the main serialization framework, we provide a mechanism to translate primitive .NET types (and some other) to their binary representation and push them to a stream. Such a form is very compact - Migrant uses the <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">Varint encoding</a> and the <a href="https://developers.google.com/protocol-buffers/docs/encoding#varints">ZigZag encoding</a>. For example, serializing an Int64 variable with value 1 gives a smaller representation than Int32 with value 1000. Although CLS offers the BinaryWriter class, it is known to be quite clumsy and not very elegant to use.</p>
+
+<p>Another extra feature, unavailable in convenient form in CLI, is an ability to deep clone given objects. With just one method invocation, Migrant will return an object copy, using the same mechanisms as the rest of the serialization framework.</p>
+
+<p>Serialization and deserialization is done using on-line generated methods for performance (the user can also use the reflection instead if he wishes).</p>
+
+<p>Migrant can also be configured to replace objects of given type with user provided objects during serialization or deserialization. The feature is known as <strong>Surrogates</strong>.</p>
+
+<p>Performance benchmarks against other popular serialization frameworks are yet to be run, but initial testing is quite promising.</p>
+
+<h2>
+<a name="download" class="anchor" href="#download"><span class="octicon octicon-link"></span></a>Download</h2>
+
+<p>To download a precompiled version of Migrant, use <a href="http://www.nuget.org/packages/Migrant/">NuGet Package Manager</a>.</p>
+
+<h2>
+<a name="compilation" class="anchor" href="#compilation"><span class="octicon octicon-link"></span></a>Compilation</h2>
+
+<p>To compile the project, open the solution file in your IDE and hit compile. You may, alternatively, compile the library from the command line:</p>
+
+<blockquote>
+<p>msbuild Migrant.sln</p>
+</blockquote>
+
+<p>or, under Mono:</p>
+
+<blockquote>
+<p>xbuild Migrant.sln</p>
+</blockquote>
+
+<h2>
+<a name="more-information" class="anchor" href="#more-information"><span class="octicon octicon-link"></span></a>More information</h2>
+
+<p>Additional information will soon be available on our <a href="http://www.antmicro.com/OpenSource">company's website</a>.</p>
 
 <p>We are available on <a href="https://www.github.com/antmicro">github</a> and <a href="http://twitter.com/antmicro">twitter</a>.</p>
 
 <p>If you have any questions, suggestions or requests regarding the Migrant library, please do not hesitate to contact us via email: <a href="mailto:migrant@antmicro.com"></a><a href="mailto:migrant@antmicro.com">migrant@antmicro.com</a>.</p>
 
-<h2>Licence</h2>
+<h2>
+<a name="licence" class="anchor" href="#licence"><span class="octicon octicon-link"></span></a>Licence</h2>
 
-<p>Migrant is released on an MIT licence, which can be found in the LICENCE file in the project's github repository.</p>
+<p>Migrant is released on an MIT licence, which can be found in LICENCE file in this directory.</p>
       </section>
       <footer>
         <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
